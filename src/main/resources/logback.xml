@@ -13,11 +13,14 @@
         </encoder>
     </appender>
 
-    <root level="error">
-        <appender-ref ref="console"/>
+    <root level="info">
     </root>
 
-    <logger name="PhysicsEngine" level="trace">
+    <logger name="App" level="info">
+        <appender-ref ref="console"/>
+    </logger>
+
+    <logger name="algebra" level="trace">
         <appender-ref ref="file"/>
     </logger>
 

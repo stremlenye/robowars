@@ -34,6 +34,22 @@ object PhysicsEngineAlgebra {
     )
   }
 
+  private[physics] def path(start : Coordinate, end : Coordinate) : NonEmptyVector[Coordinate] = {
+    NonEmptyVector.fromVectorUnsafe((
+      for {
+        x <- start.x to end.x
+        y <- start.y to end.y
+      } yield Coordinate(x, y)
+      ).toVector)
+  }
+
+  private[physics] def pathCollisionReverseLookup(path : NonEmptyVector[Coordinate],
+                                                  check : Coordinate => Option[NonEmptyVector[Entity]]) : Option[(Coordinate, NonEmptyVector[Entity])] = {
+    path.reverse.foldl(Option.empty[(Coordinate, NonEmptyVector[Entity])]) { (r, coordinate) =>
+      r.orElse(check(coordinate).map(coordinate -> _))
+    }
+  }
+
   private[physics] def getDirectionFactor(a : Double) : Int = Either.catchNonFatal((a / a).ceil.toInt).getOrElse(1)
 
   private[physics] def xDirectionFactor(v : Velocity) : Int = getDirectionFactor(v.x)
@@ -53,16 +69,19 @@ object PhysicsEngineAlgebra {
                   checkCoordinate : Coordinate => Option[NonEmptyVector[Entity]]) : F[NonEmptyVector[MovementTransition]] = {
         for {
           _ <- logger.trace(s"Computing movement transitions for ${entity.show} with velocity ${entity.velocity.show} from ${coordinate.show}")
-          newCoordinate <- F.pure(nextCoordinate(coordinate, entity.velocity))
-          _ <- logger.trace(s"Checking coordinate ${newCoordinate.show} for ${entity.show}")
-          _ <- checkCoordinate(newCoordinate).cata(F.pure, F.raiseError(EngineError("No reactors were found")))
+          pathEndCoordinate <- F.pure(nextCoordinate(coordinate, entity.velocity))
+          _ <- logger.trace(s"Building path for ${entity.show} between ${coordinate.show} and ${pathEndCoordinate.show}")
+          path <- F.pure(path(coordinate, pathEndCoordinate))
+          _ <- logger.trace(s"Checking path ${path.mkString_("[",",","]")} collisions")
+          collisions <- pathCollisionReverseLookup(path, checkCoordinate).cata(F.pure, F.raiseError(EngineError("No valid landing coordinate was found")))
+          _ <- logger.trace(s"Found landing coordinate for ${entity.show} at ${collisions._1.show}")
           newVelocity <- F.pure(nextVelocity(entity.velocity, entity.inertiaFactor))
           _ <- logger.trace(s"Velocity changes for ${entity.show} from ${entity.velocity.show} to ${newVelocity.show} ")
         } yield NonEmptyVector.one(
           MovementTransition(
             entityTransition = EntityTransition(entity, entity.updateVelocity(newVelocity)),
             from = coordinate,
-            to = newCoordinate
+            to = collisions._1
           )
         )
       }

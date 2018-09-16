@@ -14,9 +14,13 @@ object Size {
 case class Coordinate(x : Int, y : Int)
 
 object Coordinate {
+
+  private def vectorLength(coordinate: Coordinate) : Double =
+    math.sqrt(math.pow(coordinate.x.toDouble, 2D) + math.pow(coordinate.y.toDouble, 2D))
+
   implicit val ordering : Ordering[Coordinate] =
     (l : Coordinate, r : Coordinate) => {
-      l.x * l.y compare r.x * r.y
+      vectorLength(l) compare vectorLength(r)
     }
 
   implicit val show : Show[Coordinate] = Show.show(c => s"${c.x}x${c.y}")

@@ -88,7 +88,7 @@ case class Floor(id : UUID) extends Entity with Passable with Immobile {
 case class Actor(id : UUID, robot : Robot, velocity: Velocity) extends Entity  {
   override def transparent : Boolean = false
 
-  val inertiaFactor : Double = 2D
+  val inertiaFactor : Double = 0D
 
   val absorptionFactor : Double = 1D
 
