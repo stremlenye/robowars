@@ -38,21 +38,26 @@ object App {
     val length = 24L * 3
     val mapSize = 300
 
-    val out = World(
+    val initialWorld = World(
       (for {
         x <- 1 to mapSize
         y <- 1 to (mapSize / 2)
       } yield (Coordinate(x, y), NonEmptyVector.one(Floor(UUID.randomUUID())))).toMap
-    ).putEntity(Coordinate(1, 50), Actor(UUID.randomUUID(), Robot.dummy, Velocity(30,0)))
-      .map { world =>
-        GameSetup(length, world, defaultSettings, Seq.empty)
-      }.map(Game.run(_, physicsEngine)).map(_.map { frame =>
+    )
+
+    val out = (for {
+      w1 <- initialWorld.putEntity(Coordinate(1, 25), Actor(UUID.randomUUID(), Robot.dummy, Velocity(10, 0)))
+      w2 <- w1.putEntity(Coordinate(1, 50), Actor(UUID.randomUUID(), Robot.dummy, Velocity(20, 0)))
+      w3 <- w2.putEntity(Coordinate(1, 75), Actor(UUID.randomUUID(), Robot.dummy, Velocity(30, 0)))
+    } yield w3).map { world =>
+      GameSetup(length, world, defaultSettings, Seq.empty)
+    }.map(Game.run(_, physicsEngine)).map(_.map { frame =>
       val image = RenderEngine.renderFrame(frame)
       imageIO.sink(frame.index, image)
     }.toVector)
 
     ExternalProcessAlgebra[ErrorContext](
-      "ffmpeg -y -framerate 24 -i ./out/%05d.png output.mp4",
+      "ffmpeg -y -framerate 12 -i ./out/%05d.png ./out/output.mp4",
       loggingAlgebra
     ).mapK(errorLogging(loggingAlgebra)).run
 
