@@ -1,13 +1,17 @@
 package com.stremlenye.robotwars.rendering
 
+import cats._
+import cats.implicits._
 import com.sksamuel.scrimage._
 import com.sksamuel.scrimage.canvas._
+import com.stremlenye.robotwars.physics.Entity
 import com.stremlenye.robotwars.{Coordinate, Frame, Size}
 import simulacrum._
 
 @typeclass trait RenderData[A] {
   @op("color") def color(a : A) : Color
   @op("size") def size(a : A) : Size
+  @op("renderPriority") def renderPriority(a : A) : Int
 
   def drawable(a : A)(coordinate: Coordinate, scaleFactor : Int) : Drawable = {
     FilledRect(coordinate.x * scaleFactor,
@@ -26,16 +30,12 @@ object RenderEngine {
   val scaleFactor = 10
 
   def renderFrame(frame : Frame) : Image = {
+    implicit val renderOrder = Order.by((a : Entity) => a.inertiaFactor)
     val drawables = frame.world.surface.map {
-      case (coordinate, entities) => entities.head.drawable(coordinate, scaleFactor)
+      case (coordinate, entities) => entities.maximum.drawable(coordinate, scaleFactor)
     }
-
     val imageSize = scale(frame.world.size, scaleFactor)
-
-    println(s"${Console.YELLOW}>>>> imageSize = ${imageSize}${Console.RESET}")
-
     val canvas = Canvas(Image(imageSize.width, imageSize.height))
-
     canvas.draw(drawables.toSeq).image
   }
 

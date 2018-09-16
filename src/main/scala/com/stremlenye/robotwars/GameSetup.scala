@@ -26,14 +26,16 @@ final case class RemoveEntity(point : Coordinate, entity : Entity) extends Inten
 
 final case class PutEntity(point : Coordinate, entity : Entity) extends Intention
 
-case class Game(length : Long, world : World, gameSettings : GameSettings, robots : Seq[Robot])
+case class GameSetup(length : Long, world : World, gameSettings : GameSettings, robots : Seq[Robot])
 
 object Game {
 
-  def run(game : Game) : Stream[Frame] =
+  type ErrorContext[A] = Either[Throwable, A]
+
+  def run(game : GameSetup, physics : PhysicsEngineAlgebra[ErrorContext]) : Stream[Frame] =
     Stream
       .iterate(Frame(0, game.world, players(game.robots, game.gameSettings.defaultPlayerStats))) { prev =>
-        nextFrame(prev)
+        nextFrame(prev, physics)
       }.take(game.length.toInt)
 
   private def players(robots : Seq[Robot], playerStats : PlayerStats) : Set[Player] =
@@ -47,16 +49,15 @@ object Game {
       w2 <- w1.putEntity(movementTransition.to, movementTransition.entityTransition.to)
     } yield w2
 
-  def nextFrame(frame : Frame) : Frame = {
-    println(s"${Console.YELLOW}>>>> frame = ${frame.index}${Console.RESET}")
+  def nextFrame(frame : Frame, physics : PhysicsEngineAlgebra[ErrorContext]) : Frame = {
     val newWorld = frame.world.surface.toVector.foldl(frame.world) {
       (w : World, p : (Coordinate, NonEmptyVector[Entity])) =>
         val (coordinate, entities) = p
-//        println(s"${Console.YELLOW}>>>> coordinate = ${coordinate}${Console.RESET}")
-        entities.map(e => Engine.compute(e, coordinate, frame.world.surface.get))
-          .collect {
-            case Some(l) => l.toVector
-          }.flatten.foldl(Option(w)) { (optW, transition) =>
+        entities.collect {
+          case e : Actor => physics.compute(e, coordinate, frame.world.surface.get)
+        }.foldl(Vector.empty[MovementTransition]) { (a, i) =>
+          i.fold(_ => a, a ++ _.toVector)
+        }.foldl(Option(w)) { (optW, transition) =>
           optW.flatMap(applyTransition(_, transition))
         }.getOrElse(w)
     }

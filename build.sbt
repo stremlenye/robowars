@@ -4,7 +4,8 @@ lazy val root = (project in file("."))
   .settings(
     inThisBuild(List(
       Compile / run / fork := true,
-      addCompilerPlugin("org.scalamacros" % "paradise_2.12.4" % "2.1.1"),
+      addCompilerPlugin("org.scalameta" % "paradise_2.12.4" % "3.0.0-M11"),
+      addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.7"),
       organization := "com.stremlenye",
       scalaOrganization := "org.typelevel",
       scalaVersion := "2.12.4-bin-typelevel-4",

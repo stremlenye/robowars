@@ -4,6 +4,7 @@ import java.util.UUID
 
 import cats._
 import cats.implicits._
+import com.github.ghik.silencer.silent
 import com.sksamuel.scrimage.Color
 import com.stremlenye.robotwars.{Robot, Size}
 import com.stremlenye.robotwars.rendering.RenderData
@@ -19,6 +20,8 @@ object Velocity {
     override def combine(l : Velocity, r : Velocity) : Velocity =
       Velocity(l.x + r.x, l.y + r.y)
   }
+
+  implicit val show : Show[Velocity] = Show.show(a => s"${a.x}x${a.y}")
 }
 
 sealed trait Entity {
@@ -36,19 +39,32 @@ sealed trait Entity {
     */
   def absorptionFactor : Double
 
-  def velocity : Velocity = Velocity.zero
+  def velocity : Velocity
+
+  def updateVelocity(velocity: Velocity) : Entity
 }
 
 object Entity {
+
+  implicit val show : Show[Entity] = Show.show({
+    case Floor(id) => s"Floor[$id]"
+    case Actor(id, _, _) => s"Actor[$id]"
+  })
+
   implicit val eq : Eq[Entity] = Eq.by(_.id)
 
   implicit val renderData : RenderData[Entity] = new RenderData[Entity] {
-    override def color(a : Entity) : Color = a match {
-      case _ : Floor => Color(0,0,0,0)
-      case _ : Actor => Color.awt2color(java.awt.Color.GREEN)
+    def color(a : Entity) : Color = a match {
+      case _ : Floor => Color.awt2color(java.awt.Color.black)
+      case _ : Actor => Color.awt2color(java.awt.Color.white)
     }
 
-    override def size(a : Entity) : Size = Size(1, 1)
+    def size(a : Entity) : Size = Size(1, 1)
+
+    def renderPriority(a : Entity) : Int = a match {
+      case _ : Floor => 0
+      case _ : Actor => 100
+    }
   }
 }
 
@@ -57,21 +73,24 @@ trait Passable { self : Entity =>
 }
 
 trait Immobile { self : Entity =>
-  val vector : Velocity = Velocity.zero
+  val velocity : Velocity = Velocity.zero
 
   val inertiaFactor : Double = 0D
+
+  @silent
+  def updateVelocity(v : Velocity) : Entity = self
 }
 
 case class Floor(id : UUID) extends Entity with Passable with Immobile {
   override def transparent : Boolean = true
 }
 
-case class Actor(id : UUID, robot : Robot) extends Entity  {
+case class Actor(id : UUID, robot : Robot, velocity: Velocity) extends Entity  {
   override def transparent : Boolean = false
 
-  val inertiaFactor : Double = 1D
+  val inertiaFactor : Double = 2D
 
   val absorptionFactor : Double = 1D
 
-  override def velocity : Velocity = Velocity(10,10)
+  override def updateVelocity(v : Velocity) : Entity = this.copy(velocity = v)
 }
