@@ -1,10 +1,9 @@
 package com.stremlenye.robotwars
 
-import java.util.UUID
-
 import cats._
 import cats.data._
 import cats.implicits._
+import com.stremlenye.robotwars.physics._
 
 case class Size(width : Int, height : Int)
 
@@ -12,119 +11,87 @@ object Size {
   val zero = Size(0, 0)
 }
 
-case class Point(x : Int, y : Int)
+case class Coordinate(x : Int, y : Int)
 
-object Point {
-  implicit val ordering : Ordering[Point] = (l : Point, r : Point) => l.x * l.y compare r.x * r.y
+object Coordinate {
+  implicit val ordering : Ordering[Coordinate] =
+    (l : Coordinate, r : Coordinate) => {
+      l.x * l.y compare r.x * r.y
+    }
 
-  implicit val monoid : Monoid[Point] = new Monoid[Point] {
-    override def empty : Point = Point(0, 0)
+  implicit val show : Show[Coordinate] = Show.show(c => s"${c.x}x${c.y}")
 
-    override def combine(l : Point, r : Point) : Point =
-      Point(
+  implicit val monoid : Monoid[Coordinate] = new Monoid[Coordinate] {
+    override def empty : Coordinate = Coordinate(0, 0)
+
+    override def combine(l : Coordinate, r : Coordinate) : Coordinate =
+      Coordinate(
         x = l.x + r.x,
         y = l.y + r.y
       )
   }
 
-  implicit val eq : Eq[Point] = Eq.by(p => p.x -> p.y)
+  implicit val eq : Eq[Coordinate] = Eq.by(p => p.x -> p.y)
 }
 
-trait Entity {
-  def id : UUID
-
-  def transparent : Boolean
-
-  def passable : Boolean
-}
-
-object Entity {
-  implicit val eq : Eq[Entity] = Eq.by(_.id)
-}
-
-case class Floor(id : UUID) extends Entity {
-  override def transparent : Boolean = true
-
-  override def passable : Boolean = true
-}
-
-case class Water(id : UUID) extends Entity {
-  override def transparent : Boolean = true
-
-  override def passable : Boolean = false
-}
-
-case class Wall(id : UUID) extends Entity {
-  override def transparent : Boolean = false
-
-  override def passable : Boolean = false
-}
-
-case class Actor(id : UUID) extends Entity {
-  override def transparent : Boolean = false
-
-  override def passable : Boolean = true
-}
 
 trait View[A] {
   def size(a : A) : Size
 
-  def pick(a : A)(point : Point) : Option[Chain[Entity]]
+  def pick(a : A)(point : Coordinate) : Option[NonEmptyVector[Entity]]
 }
 
-case class World(surface : Map[Point, Chain[Entity]]) {
+case class World(surface : Map[Coordinate, NonEmptyVector[Entity]]) {
 
-  def topLeftCorner : Option[Point] =
+  def topLeftCorner : Option[Coordinate] =
     Either.catchNonFatal(surface.keys.min).toOption
 
-  def bottomRightCorner : Option[Point] =
+  def bottomRightCorner : Option[Coordinate] =
     Either.catchNonFatal(surface.keys.max).toOption
 
-  def size : Size = (for {
+  val size : Size = (for {
     tlCorner <- topLeftCorner
     brCorner <- bottomRightCorner
   } yield Size(brCorner.x - tlCorner.x, brCorner.y - tlCorner.y)).getOrElse(Size.zero)
 
-  def pickRect(center : Point, radius : Int) : World = {
+  def pickRect(center : Coordinate, radius : Int) : World = {
     val points = (for {
       x <- (radius * -1) to radius
       y <- (radius * -1) to radius
     } yield
       surface
-        .get(Point(center.x + x, center.y + y))
-        .map(Point(x + radius, y + radius) -> _))
+        .get(Coordinate(center.x + x, center.y + y))
+        .map(Coordinate(x + radius, y + radius) -> _))
       .collect { case Some(a) => a }
       .toMap
 
     World(points)
   }
 
-  def putEntity(point: Point, entity: Entity) : World =
-    World(surface.updated(point, surface.getOrElse(point, Chain.empty[Entity]).append(entity)))
+  private def stackEntities(entity: Entity, entities : NonEmptyVector[Entity]) : Option[NonEmptyVector[Entity]] = {
+    Option(entities).map(_.append(entity))
+  }
 
-  def combine(world : World) : Option[World] = World.combine(this, world)
+  def putEntity(point: Coordinate, entity: Entity) : Option[World] =
+    for {
+      entities <- surface.get(point)
+      stacked <- stackEntities(entity, entities)
+    } yield World(surface.updated(point, stacked))
+
+  def removeEntity(point: Coordinate, entity: Entity) : Option[World] =
+    for {
+      entities <- surface.get(point)
+      updated <- Option(entities.filterNot(_.id === entity.id))
+        .flatMap(NonEmptyVector.fromVector)
+    } yield World(surface.updated(point, updated))
+
 }
 
 object World {
   implicit val view : View[World] = new View[World] {
     override def size(a : World) : Size = a.size
 
-    override def pick(a : World)(point : Point) : Option[Chain[Entity]] = a.surface.get(point)
-  }
-
-  private case class NonPassableObjectsCounter(i : Int) {
-    def valid : Boolean = i <= 0
-
-    def combine(e : Entity) : NonPassableObjectsCounter =
-      if (e.passable) this else NonPassableObjectsCounter(i + 1)
-  }
-
-  def combine(l : World, r : World) : Option[World] = {
-    Option(World(l.surface.combine(r.surface)))
-      .filterNot(_.surface.exists {
-        case (_, entities) => entities
-          .foldl(NonPassableObjectsCounter(0))(_ combine _).valid == false
-      })
+    override def pick(a : World)(point : Coordinate) : Option[NonEmptyVector[Entity]] = a.surface.get(point)
   }
 }
 
@@ -152,4 +119,12 @@ trait Robot {
   def name : String
 
   def react[A : View, B : Stats](a : A, b : B) : Reaction
+}
+
+object Robot {
+  def dummy : Robot = new Robot {
+    override def name : String = "Dummy"
+
+    override def react[A : View, B : Stats](a : A, b : B) : Reaction = NoReaction
+  }
 }

@@ -1,8 +1,10 @@
 import Dependencies._
 
-lazy val root = (project in file(".")).
-  settings(
+lazy val root = (project in file("."))
+  .settings(
     inThisBuild(List(
+      Compile / run / fork := true,
+      addCompilerPlugin("org.scalamacros" % "paradise_2.12.4" % "2.1.1"),
       organization := "com.stremlenye",
       scalaOrganization := "org.typelevel",
       scalaVersion := "2.12.4-bin-typelevel-4",

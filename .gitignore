@@ -17,3 +17,5 @@ gc.data*
 */secrets_*
 scratch*.json
 \?
+
+out
