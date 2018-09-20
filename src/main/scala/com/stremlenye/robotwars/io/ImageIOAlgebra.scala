@@ -21,7 +21,7 @@ object ImageIOAlgebra {
                                                 logger : LoggingAlgebra[F]) : ImageIOAlgebra[F] =
     new ImageIOAlgebra[F] {
       override def sink(frameNumber : Long, image : Image) : F[Unit] = {
-        Benchmark.withTimer("ImageIOAlgebra.sink") {
+        Benchmark.withTimer(s"ImageIOAlgebra.sink_${frameNumber}") {
           val fileName = "%05d.png".format(frameNumber)
 
           for {

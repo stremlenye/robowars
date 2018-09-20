@@ -15,8 +15,9 @@
 
     <appender name="benchmark" class="ch.qos.logback.core.FileAppender">
         <file>${log-file:-benchmark.log}</file>
+        <append>false</append>
         <encoder>
-            <pattern>%logger{0} - %msg%n</pattern>
+            <pattern>[%thread]: %logger{0} - %msg%n</pattern>
         </encoder>
     </appender>
 

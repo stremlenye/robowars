@@ -39,7 +39,7 @@ object Game {
     Stream
       .iterateEval[IO, Frame](Frame(0, game.world, players(game.robots, game.gameSettings.defaultPlayerStats))) { prev =>
         IO {
-          Benchmark.withTimer("nextFrame") {
+          Benchmark.withTimer(s"nextFrame_${prev.index + 1}") {
             nextFrame(prev, physics)
           }
         }

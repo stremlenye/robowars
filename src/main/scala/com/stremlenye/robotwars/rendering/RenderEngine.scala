@@ -44,7 +44,7 @@ object RenderAlgebra {
                   logger : LoggingAlgebra[F],
                   offset : Int = 0)(implicit F : Monad[F]) : RenderAlgebra[F] = new RenderAlgebra[F] {
     override def render(frame : Frame) : F[Image] = {
-      Benchmark.withTimer("RenderAlgebra.render") {
+      Benchmark.withTimer(s"RenderAlgebra.render_${frame.index}") {
         implicit val renderOrder = Order.by((a : Entity) => a.inertiaFactor)
         val drawables = frame.world.surface.map {
           case (coordinate, entities) => toDrawable(entities.maximum, applyOffset(coordinate, offset), scaleFactor)

@@ -21,6 +21,8 @@ import com.stremlenye.robotwars.utils.algebras.{ExternalProcessAlgebra, SimpleLo
 import scala.concurrent.ExecutionContext
 
 object App {
+  implicit val cs = IOContextShift(ExecutionContext.fromExecutor(new ForkJoinPool(100)))
+
   def main(args : Array[String]) : Unit = {
     val imagesOutputPath = Files.createTempDirectory("images").toAbsolutePath
     val videoOutputPath = Files.createTempFile("output", ".mp4").toAbsolutePath
@@ -63,24 +65,21 @@ object App {
     val length = 24L * 5
     val mapSize = 150
 
-    implicit val cs = IOContextShift(ExecutionContext.fromExecutor(new ForkJoinPool(100)))
-
-    Benchmark.withTimer("app") {
+    Benchmark.withTimer("app_async") {
       for {
         world <- generateWorld(mapSize, mapSize / 2)
         gameSetup <- F.pure(GameSetup(length, world, defaultSettings, Seq.empty))
         _ <- Either.catchNonFatal {
-          Game.run(gameSetup, physicsEngine).mapAsyncUnordered(100) { frame =>
-            IO.fromEither(frameSink(frame))
-          }.compile.drain.unsafeRunSync()
-//          Game.run(gameSetup, physicsEngine).map { frame =>
-//            frameSink(frame)
-//          }.compile.drain.unsafeRunSync()
+          Game.run(gameSetup, physicsEngine)
+            .mapAsyncUnordered(100) { frame =>
+              IO.delay(frameSink(frame)).flatMap(IO.fromEither)
+            }.compile.drain.unsafeRunSync()
         }
         _ <- videoGenerator.run
         _ <- loggingAlgebra.info(videoOutputPath.toString)
       } yield ()
     }
+
     ()
   }
 
