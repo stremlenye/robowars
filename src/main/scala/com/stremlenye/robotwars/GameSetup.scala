@@ -5,6 +5,8 @@ import java.util.UUID
 import cats.data._
 import cats.implicits._
 import com.stremlenye.robotwars.physics._
+import com.stremlenye.robotwars.utils.Benchmark
+import fs2.Stream
 
 case class Frame(index : Long, world : World, players : Set[Player])
 
@@ -29,14 +31,19 @@ final case class PutEntity(point : Coordinate, entity : Entity) extends Intentio
 case class GameSetup(length : Long, world : World, gameSettings : GameSettings, robots : Seq[Robot])
 
 object Game {
+  import cats.effect.IO
 
   type ErrorContext[A] = Either[Throwable, A]
 
-  def run(game : GameSetup, physics : PhysicsEngineAlgebra[ErrorContext]) : Stream[Frame] =
+  def run(game : GameSetup, physics : PhysicsEngineAlgebra[ErrorContext]) : Stream[IO, Frame] =
     Stream
-      .iterate(Frame(0, game.world, players(game.robots, game.gameSettings.defaultPlayerStats))) { prev =>
-        nextFrame(prev, physics)
-      }.take(game.length.toInt)
+      .iterateEval[IO, Frame](Frame(0, game.world, players(game.robots, game.gameSettings.defaultPlayerStats))) { prev =>
+        IO {
+          Benchmark.withTimer("nextFrame") {
+            nextFrame(prev, physics)
+          }
+        }
+    }.take(game.length)
 
   private def players(robots : Seq[Robot], playerStats : PlayerStats) : Set[Player] =
     robots

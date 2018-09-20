@@ -6,6 +6,7 @@ import cats.tagless.{autoFunctorK, finalAlg}
 import com.sksamuel.scrimage._
 import com.sksamuel.scrimage.canvas._
 import com.stremlenye.robotwars.physics.Entity
+import com.stremlenye.robotwars.utils.Benchmark
 import com.stremlenye.robotwars.utils.algebras.LoggingAlgebra
 import com.stremlenye.robotwars.{Coordinate, Frame, Size}
 import simulacrum._
@@ -43,15 +44,17 @@ object RenderAlgebra {
                   logger : LoggingAlgebra[F],
                   offset : Int = 0)(implicit F : Monad[F]) : RenderAlgebra[F] = new RenderAlgebra[F] {
     override def render(frame : Frame) : F[Image] = {
-      implicit val renderOrder = Order.by((a : Entity) => a.inertiaFactor)
-      val drawables = frame.world.surface.map {
-        case (coordinate, entities) => toDrawable(entities.maximum, applyOffset(coordinate, offset), scaleFactor)
-      }
-      val imageSize = scale(frame.world.size, scaleFactor, offset)
-      val canvas = Canvas(Image.filled(imageSize.width, imageSize.height, color = Color.awt2color(java.awt.Color.CYAN)))
+      Benchmark.withTimer("RenderAlgebra.render") {
+        implicit val renderOrder = Order.by((a : Entity) => a.inertiaFactor)
+        val drawables = frame.world.surface.map {
+          case (coordinate, entities) => toDrawable(entities.maximum, applyOffset(coordinate, offset), scaleFactor)
+        }
+        val imageSize = scale(frame.world.size, scaleFactor, offset)
+        val canvas = Canvas(Image.filled(imageSize.width, imageSize.height, color = Color.awt2color(java.awt.Color.CYAN)))
         for {
           _ <- logger.trace(s"Rendering frame ${frame.index}")
         } yield canvas.draw(drawables.toSeq).image
       }
+    }
   }
 }

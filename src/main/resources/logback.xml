@@ -13,6 +13,13 @@
         </encoder>
     </appender>
 
+    <appender name="benchmark" class="ch.qos.logback.core.FileAppender">
+        <file>${log-file:-benchmark.log}</file>
+        <encoder>
+            <pattern>%logger{0} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
     <root level="info">
     </root>
 
@@ -22,6 +29,10 @@
 
     <logger name="algebra" level="trace">
         <appender-ref ref="file"/>
+    </logger>
+
+    <logger name="benchmark" level="info">
+        <appender-ref ref="benchmark"/>
     </logger>
 
 </configuration>

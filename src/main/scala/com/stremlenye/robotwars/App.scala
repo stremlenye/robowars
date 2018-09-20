@@ -2,24 +2,28 @@ package com.stremlenye.robotwars
 
 import java.nio.file.Files
 import java.util.UUID
+import java.util.concurrent.ForkJoinPool
 
 import cats.Monad
 import cats.implicits._
-import cats.data.NonEmptyVector
+import cats.data._
+import cats.effect.internals.IOContextShift
 import cats.tagless.implicits._
 import mouse.option._
+import cats.effect._
 import com.stremlenye.robotwars.mtl.Transformations._
 import com.stremlenye.robotwars.io.ImageIOAlgebra
 import com.stremlenye.robotwars.physics.{Actor, Floor, PhysicsEngineAlgebra, Velocity}
 import com.stremlenye.robotwars.rendering.RenderAlgebra
-import com.stremlenye.robotwars.utils.Ffmpeg
+import com.stremlenye.robotwars.utils.{Benchmark, Ffmpeg}
 import com.stremlenye.robotwars.utils.algebras.{ExternalProcessAlgebra, SimpleLogging}
 
+import scala.concurrent.ExecutionContext
 
 object App {
   def main(args : Array[String]) : Unit = {
     val imagesOutputPath = Files.createTempDirectory("images").toAbsolutePath
-    val videoOutputPath = Files.createTempFile("output",".mp4").toAbsolutePath
+    val videoOutputPath = Files.createTempFile("output", ".mp4").toAbsolutePath
 
     type ErrorContext[A] = Either[Throwable, A]
 
@@ -34,7 +38,7 @@ object App {
       trilogging(loggingAlgebra)("Saving frame image", "Saved framed image")
     )
 
-    def frameSink(frame: Frame) : ErrorContext[Unit] =
+    def frameSink(frame : Frame) : ErrorContext[Unit] =
       for {
         image <- renderer.render(frame)
         _ <- imageIO.sink(frame.index, image)
@@ -59,15 +63,24 @@ object App {
     val length = 24L * 5
     val mapSize = 150
 
-    for {
-      world <- generateWorld(mapSize, mapSize / 2)
-      gameSetup <- F.pure(GameSetup(length, world, defaultSettings, Seq.empty))
-      _ <- Game.run(gameSetup, physicsEngine).foldl(F.pure(())) { (_, frame) =>
-        frameSink(frame)
-      }
-      _ <- videoGenerator.run
-      _ <- loggingAlgebra.info(videoOutputPath.toString)
-    } yield ()
+    implicit val cs = IOContextShift(ExecutionContext.fromExecutor(new ForkJoinPool(100)))
+
+    Benchmark.withTimer("app") {
+      for {
+        world <- generateWorld(mapSize, mapSize / 2)
+        gameSetup <- F.pure(GameSetup(length, world, defaultSettings, Seq.empty))
+        _ <- Either.catchNonFatal {
+          Game.run(gameSetup, physicsEngine).mapAsyncUnordered(100) { frame =>
+            IO.fromEither(frameSink(frame))
+          }.compile.drain.unsafeRunSync()
+//          Game.run(gameSetup, physicsEngine).map { frame =>
+//            frameSink(frame)
+//          }.compile.drain.unsafeRunSync()
+        }
+        _ <- videoGenerator.run
+        _ <- loggingAlgebra.info(videoOutputPath.toString)
+      } yield ()
+    }
     ()
   }
 

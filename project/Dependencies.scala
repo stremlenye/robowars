@@ -16,7 +16,12 @@ object Dependencies {
 
   lazy val cats = Seq(
     "org.typelevel" %% "cats-core" % catsVersion,
-    "org.typelevel" %% "mouse" % "0.18"
+    "org.typelevel" %% "mouse" % "0.18",
+    "org.typelevel" %% "cats-effect" % "1.0.0"
+  )
+
+  lazy val fs2 = Seq(
+    "co.fs2" %% "fs2-core" % "1.0.0-M5"
   )
 
   lazy val shapeless = Seq(
@@ -45,6 +50,15 @@ object Dependencies {
     "com.github.ghik" %% "silencer-lib" % silencerVersion % Provided
   )
 
-  lazy val all = cats ++ circe ++ shapeless ++ simulacrum ++ scrimage ++ scalaTest ++ logging ++ tagless ++ silencer
+  lazy val all = cats ++
+    circe ++
+    shapeless ++
+    simulacrum ++
+    scrimage ++
+    scalaTest ++
+    logging ++
+    tagless ++
+    silencer ++
+    fs2
 
 }
