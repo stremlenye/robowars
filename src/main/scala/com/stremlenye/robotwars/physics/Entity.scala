@@ -8,6 +8,7 @@ import com.github.ghik.silencer.silent
 import com.sksamuel.scrimage.Color
 import com.stremlenye.robotwars.{Robot, Size}
 import com.stremlenye.robotwars.rendering.RenderData
+import com.stremlenye.robotwars.utils.colors
 
 final case class Velocity(x : Double, y : Double)
 
@@ -55,11 +56,15 @@ object Entity {
 
   implicit val renderData : RenderData[Entity] = new RenderData[Entity] {
     def color(a : Entity) : Color = a match {
-      case _ : Floor => Color.awt2color(java.awt.Color.black)
-      case _ : Actor => Color.awt2color(java.awt.Color.white)
+      case _ : Floor =>  Color.awt2color(java.awt.Color.black)
+      case _ : Actor => colors.randomColor(a.id.hashCode())
     }
 
-    def size(a : Entity) : Size = Size(1, 1)
+    def size(a : Entity) : Size =
+      a match {
+        case _ : Floor => Size(1, 1)
+        case _ : Actor => Size(5, 5)
+      }
 
     def renderPriority(a : Entity) : Int = a match {
       case _ : Floor => 0

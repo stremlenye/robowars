@@ -2,7 +2,6 @@ package com.stremlenye.robotwars
 
 import java.nio.file.Files
 import java.util.UUID
-import java.util.concurrent.ForkJoinPool
 
 import cats.Monad
 import cats.implicits._
@@ -14,16 +13,14 @@ import cats.effect._
 import com.stremlenye.robotwars.mtl.Transformations._
 import com.stremlenye.robotwars.io.ImageIOAlgebra
 import com.stremlenye.robotwars.physics.{Actor, Floor, PhysicsEngineAlgebra, Velocity}
-import com.stremlenye.robotwars.rendering.RenderAlgebra
+import com.stremlenye.robotwars.rendering.{RenderAlgebra, ScaleFactor}
 import com.stremlenye.robotwars.utils.{Benchmark, Ffmpeg}
 import com.stremlenye.robotwars.utils.algebras.{ExternalProcessAlgebra, SimpleLogging}
-
-import scala.concurrent.ExecutionContext
+import com.stremlenye.robotwars.utils.executors._
 
 object App {
-  implicit val cs = IOContextShift(ExecutionContext.fromExecutor(new ForkJoinPool(100)))
-
   def main(args : Array[String]) : Unit = {
+    implicit val cs = IOContextShift(ioContext)
     val imagesOutputPath = Files.createTempDirectory("images").toAbsolutePath
     val videoOutputPath = Files.createTempFile("output", ".mp4").toAbsolutePath
 
@@ -33,7 +30,10 @@ object App {
 
     val loggingAlgebra = SimpleLogging[ErrorContext]("App")
 
-    val renderer = RenderAlgebra[ErrorContext](20, SimpleLogging[ErrorContext]("algebra.RenderAlgebra"))
+    val renderer = RenderAlgebra[ErrorContext](
+      ScaleFactor(20),
+      logger = SimpleLogging[ErrorContext]("algebra.RenderAlgebra")
+    )
     val imageIO = ImageIOAlgebra[ErrorContext](
       imagesOutputPath,
       SimpleLogging[ErrorContext]("algebra.ImageIO")).mapK(
@@ -71,7 +71,7 @@ object App {
         gameSetup <- F.pure(GameSetup(length, world, defaultSettings, Seq.empty))
         _ <- Either.catchNonFatal {
           Game.run(gameSetup, physicsEngine)
-            .mapAsyncUnordered(100) { frame =>
+            .mapAsyncUnordered(parallelismFactor) { frame =>
               IO.delay(frameSink(frame)).flatMap(IO.fromEither)
             }.compile.drain.unsafeRunSync()
         }

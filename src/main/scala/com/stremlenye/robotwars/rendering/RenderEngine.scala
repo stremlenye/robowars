@@ -8,7 +8,7 @@ import com.sksamuel.scrimage.canvas._
 import com.stremlenye.robotwars.physics.Entity
 import com.stremlenye.robotwars.utils.Benchmark
 import com.stremlenye.robotwars.utils.algebras.LoggingAlgebra
-import com.stremlenye.robotwars.{Coordinate, Frame, Size}
+import com.stremlenye.robotwars.{Coordinate, Frame, Size, World}
 import simulacrum._
 
 @typeclass trait RenderData[A] {
@@ -23,37 +23,58 @@ trait RenderAlgebra[F[_]] {
   def render(frame : Frame) : F[Image]
 }
 
-object RenderAlgebra {
-  private[rendering] def scale(size : Size, factor : Int, offset : Int) : Size =
-    Size(size.width * factor + offset, size.height * factor + offset )
+case class ScaleFactor(toInt : Int)
+case class Offset(toInt : Int)
 
-  private[rendering] def toDrawable[A : RenderData](a : A, coordinate: Coordinate, scaleFactor : Int) : Drawable = {
+object Offset {
+  val zero = Offset(0)
+}
+
+object Rendering {
+  implicit val renderOrder = Order.by((a : Entity) => a.inertiaFactor)
+
+  def scale(size : Size, factor : ScaleFactor) : Size =
+    Size(size.width * factor.toInt, size.height * factor.toInt)
+
+  def scale(coordinate: Coordinate, factor : ScaleFactor) : Coordinate =
+    Coordinate(coordinate.x * factor.toInt, coordinate.y * factor.toInt)
+
+  def addOffset(coordinate: Coordinate, offset: Offset) : Coordinate =
+    coordinate |+| Coordinate(offset.toInt, offset.toInt)
+
+  def toDrawable[A : RenderData](a : A, coordinate: Coordinate, scaleFactor : ScaleFactor) : Drawable = {
     import RenderData.ops._
-    FilledRect(coordinate.x * scaleFactor,
-      coordinate.y * scaleFactor,
-      a.size.height * scaleFactor,
-      a.size.width * scaleFactor,
+    val actualCoordinate = scale(coordinate, scaleFactor)
+    val actualSize = scale(a.size, scaleFactor)
+    FilledRect(actualCoordinate.x,
+      actualCoordinate.y,
+      actualSize.height,
+      actualSize.width,
       Context.Default.copy(color = a.color)
     )
   }
 
-  private[rendering] def applyOffset(coordinate: Coordinate, offset : Int) : Coordinate =
-    coordinate |+| Coordinate(offset / 2, offset / 2)
+  def getDrawables(world : World, scaleFactor : ScaleFactor) : Vector[Drawable] = {
+    world.surface.map {
+      case (coordinate, entities) =>
+        toDrawable(entities.maximum, coordinate, scaleFactor)
+    }.toVector
+  }
+}
 
-  def apply[F[_]](scaleFactor : Int,
-                  logger : LoggingAlgebra[F],
-                  offset : Int = 0)(implicit F : Monad[F]) : RenderAlgebra[F] = new RenderAlgebra[F] {
+object RenderAlgebra {
+
+  def apply[F[_]](scaleFactor : ScaleFactor,
+                  logger : LoggingAlgebra[F])(implicit F : Monad[F]) : RenderAlgebra[F] = new RenderAlgebra[F] {
     override def render(frame : Frame) : F[Image] = {
+      import Rendering._
       Benchmark.withTimer(s"RenderAlgebra.render_${frame.index}") {
-        implicit val renderOrder = Order.by((a : Entity) => a.inertiaFactor)
-        val drawables = frame.world.surface.map {
-          case (coordinate, entities) => toDrawable(entities.maximum, applyOffset(coordinate, offset), scaleFactor)
-        }
-        val imageSize = scale(frame.world.size, scaleFactor, offset)
+        val drawables = getDrawables(frame.world, scaleFactor)
+        val imageSize = scale(frame.world.size, scaleFactor)
         val canvas = Canvas(Image.filled(imageSize.width, imageSize.height, color = Color.awt2color(java.awt.Color.CYAN)))
         for {
           _ <- logger.trace(s"Rendering frame ${frame.index}")
-        } yield canvas.draw(drawables.toSeq).image
+        } yield canvas.draw(drawables).image
       }
     }
   }
