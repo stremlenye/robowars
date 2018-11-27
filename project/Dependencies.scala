@@ -21,7 +21,7 @@ object Dependencies {
   )
 
   lazy val fs2 = Seq(
-    "co.fs2" %% "fs2-core" % "1.0.0-M5"
+    "co.fs2" %% "fs2-core" % "1.0.0"
   )
 
   lazy val shapeless = Seq(
